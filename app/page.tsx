@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { ChevronDown, Loader2, AlertCircle, X, Globe, Heart, Star } from 'lucide-react';
+import Image from 'next/image';
 
 interface Breed {
   id: string;
@@ -29,6 +30,8 @@ export default function CatBreedsGallery() {
   const [dropdownOpen, setDropdownOpen] = useState<boolean>(false);
   const [originDropdownOpen, setOriginDropdownOpen] = useState<boolean>(false);
   const [modalImage, setModalImage] = useState<CatImage | null>(null);
+  const [favorites, setFavorites] = useState<CatImage[]>([]);
+  const [showFavorites, setShowFavorites] = useState<boolean>(false);
 
   // Fetch breeds on component mount
   useEffect(() => {
@@ -54,6 +57,19 @@ export default function CatBreedsGallery() {
 
     fetchBreeds();
   }, []);
+
+  // Load favorites from local storage on component mount
+  useEffect(() => {
+    const storedFavorites = localStorage.getItem('cat-favorites');
+    if (storedFavorites) {
+      setFavorites(JSON.parse(storedFavorites));
+    }
+  }, []);
+
+  // Save favorites to local storage whenever they change
+  useEffect(() => {
+    localStorage.setItem('cat-favorites', JSON.stringify(favorites));
+  }, [favorites]);
 
   // Get unique origins for filter
   const uniqueOrigins = useMemo(() => {
@@ -87,7 +103,7 @@ export default function CatBreedsGallery() {
       setError('');
       
       const response = await fetch(
-        `https://api.thecatapi.com/v1/images/search?breed_ids=${breedId}&limit=16`
+        `https://api.thecatapi.com/v1/images/search?breed_ids=${breedId}&limit=100`
       );
       
       if (!response.ok) {
@@ -108,6 +124,7 @@ export default function CatBreedsGallery() {
   const handleBreedSelect = (breedId: string) => {
     setSelectedBreed(breedId);
     setDropdownOpen(false);
+    setShowFavorites(false);
     fetchImages(breedId);
   };
 
@@ -117,6 +134,7 @@ export default function CatBreedsGallery() {
     // Reset selected breed when origin changes
     setSelectedBreed('');
     setImages([]);
+    setShowFavorites(false);
   };
 
   const openModal = (image: CatImage) => {
@@ -142,6 +160,17 @@ export default function CatBreedsGallery() {
       return () => document.removeEventListener('keydown', handleEscape);
     }
   }, [modalImage]);
+
+  const toggleFavorite = (image: CatImage) => {
+    setFavorites(prevFavorites => {
+      const isFavorite = prevFavorites.some(fav => fav.id === image.id);
+      if (isFavorite) {
+        return prevFavorites.filter(fav => fav.id !== image.id);
+      } else {
+        return [...prevFavorites, image];
+      }
+    });
+  };
 
   const selectedBreedInfo = breeds.find(breed => breed.id === selectedBreed);
 
@@ -290,10 +319,22 @@ export default function CatBreedsGallery() {
               )}
             </div>
           </div>
+           {/* Favorites Button */}
+           <div className="text-center mt-8">
+            <button
+              onClick={() => setShowFavorites(!showFavorites)}
+              className="bg-pink-500 text-white font-bold py-3 px-8 rounded-full shadow-lg hover:bg-pink-600 transition-all duration-300 transform hover:scale-105"
+            >
+              <div className="flex items-center gap-2">
+                <Heart className={`w-6 h-6 ${showFavorites ? 'fill-white' : ''}`} />
+                <span>{showFavorites ? 'Back to Gallery' : `View Favorites (${favorites.length})`}</span>
+              </div>
+            </button>
+          </div>
         </div>
 
         {/* Selected Breed Info */}
-        {selectedBreedInfo && (
+        {selectedBreedInfo && !showFavorites && (
           <div className="max-w-5xl mx-auto mb-12 bg-white/90 backdrop-blur-sm rounded-3xl shadow-2xl p-8 border-2 border-orange-200 relative overflow-hidden">
             <div className="absolute top-4 right-4 text-4xl float-animation">😻</div>
             <h2 className="text-3xl md:text-4xl font-bold text-amber-900 mb-4 font-fredoka flex items-center gap-3">
@@ -326,7 +367,7 @@ export default function CatBreedsGallery() {
         )}
 
         {/* Error Message */}
-        {error && (
+        {error && !showFavorites && (
           <div className="max-w-3xl mx-auto mb-12 bg-red-50 border-2 border-red-200 rounded-2xl p-6 flex items-center gap-4">
             <div className="text-3xl">😿</div>
             <div>
@@ -337,7 +378,7 @@ export default function CatBreedsGallery() {
         )}
 
         {/* Loading Spinner for Images */}
-        {loadingImages && (
+        {loadingImages && !showFavorites && (
           <div className="flex flex-col items-center justify-center py-20">
             <div className="text-6xl mb-6 float-animation">🐱</div>
             <Loader2 className="w-16 h-16 animate-spin text-orange-500 mb-6" />
@@ -347,45 +388,88 @@ export default function CatBreedsGallery() {
         )}
 
         {/* Images Grid */}
-        {!loadingImages && images.length > 0 && (
+        {!loadingImages && images.length > 0 && !showFavorites && (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8">
-            {images.map((image, index) => (
-              <div 
-                key={image.id} 
-                className="group relative overflow-hidden rounded-3xl shadow-xl hover:shadow-2xl transition-all duration-500 transform hover:scale-105 hover:-rotate-1 bg-white cursor-pointer border-4 border-orange-100 hover:border-orange-300"
-                onClick={() => openModal(image)}
-              >
-                <div className="aspect-square relative bg-gradient-to-br from-orange-50 to-amber-50">
-                  <img
-                    src={image.url}
-                    alt={`${selectedBreedInfo?.name || 'Cat'} #${index + 1} - Beautiful ${selectedBreedInfo?.name || 'cat'} photo`}
-                    className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-                    loading="lazy"
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement;
-                      target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjNmNGY2Ii8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCwgc2Fucy1zZXJpZiIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzk3OTc5NyIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPkltYWdlIG5vdCBhdmFpbGFibGU8L3RleHQ+PC9zdmc+';
-                      target.alt = 'Shy kitty - image not available 😸';
-                    }}
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-orange-900/30 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-500">
-                    <div className="bg-white/95 rounded-full p-3 shadow-lg">
-                      <Heart className="w-8 h-8 text-red-500 heart-pulse" />
-                    </div>
+            {images.map((image, index) => {
+              const isFavorite = favorites.some(fav => fav.id === image.id);
+              return (
+                <div 
+                  key={image.id} 
+                  className="group relative overflow-hidden rounded-3xl shadow-xl hover:shadow-2xl transition-all duration-500 transform hover:scale-105 hover:-rotate-1 bg-white cursor-pointer border-4 border-orange-100 hover:border-orange-300"
+                >
+                  <div className="aspect-square relative bg-gradient-to-br from-orange-50 to-amber-50" onClick={() => openModal(image)}>
+                    <Image
+                      src={image.url}
+                      alt={`${selectedBreedInfo?.name || 'Cat'} #${index + 1} - Beautiful ${selectedBreedInfo?.name || 'cat'} photo`}
+                      className="transition-transform duration-700 group-hover:scale-110"
+                      fill
+                      sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                      style={{ objectFit: 'cover' }}
+                      unoptimized
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-orange-900/30 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
                   </div>
-                  <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-500">
-                    <div className="bg-orange-500 text-white rounded-full px-3 py-1 text-sm font-semibold shadow-lg">
-                      Click me! 📸
+                  <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-500 z-10">
+                      <button 
+                        onClick={() => toggleFavorite(image)}
+                        className="bg-white/95 rounded-full p-2 shadow-lg"
+                      >
+                        <Heart className={`w-6 h-6 transition-colors duration-300 ${isFavorite ? 'text-red-500 fill-red-500' : 'text-gray-500'}`} />
+                      </button>
                     </div>
-                  </div>
                 </div>
+              )
+            })}
+          </div>
+        )}
+
+        {/* Favorites Grid */}
+        {showFavorites && (
+          <div>
+            <h2 className="text-3xl md:text-4xl font-bold text-amber-900 mb-8 text-center font-fredoka">
+              Your Favorite Felines 💖
+            </h2>
+            {favorites.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8">
+                {favorites.map((image, index) => (
+                  <div 
+                    key={image.id} 
+                    className="group relative overflow-hidden rounded-3xl shadow-xl hover:shadow-2xl transition-all duration-500 transform hover:scale-105 hover:-rotate-1 bg-white cursor-pointer border-4 border-orange-100 hover:border-orange-300"
+                  >
+                    <div className="aspect-square relative bg-gradient-to-br from-orange-50 to-amber-50" onClick={() => openModal(image)}>
+                      <Image
+                        src={image.url}
+                        alt={`Favorite cat #${index + 1}`}
+                        className="transition-transform duration-700 group-hover:scale-110"
+                        fill
+                        sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                        style={{ objectFit: 'cover' }}
+                        unoptimized
+                      />
+                    </div>
+                    <div className="absolute top-3 right-3 z-10">
+                        <button 
+                          onClick={() => toggleFavorite(image)}
+                          className="bg-white/95 rounded-full p-2 shadow-lg"
+                        >
+                          <Heart className="w-6 h-6 text-red-500 fill-red-500" />
+                        </button>
+                      </div>
+                  </div>
+                ))}
               </div>
-            ))}
+            ) : (
+              <div className="text-center py-20">
+                <div className="text-8xl mb-6">😿</div>
+                <p className="text-2xl text-amber-700 mb-4 font-semibold">You have no favorites yet!</p>
+                <p className="text-amber-600 text-lg">Click the heart on any photo to save your favorite cats. 🐾</p>
+              </div>
+            )}
           </div>
         )}
 
         {/* No Images Message */}
-        {!loadingImages && selectedBreed && images.length === 0 && !error && (
+        {!loadingImages && selectedBreed && images.length === 0 && !error && !showFavorites &&(
           <div className="text-center py-20">
             <div className="text-8xl mb-6">😿</div>
             <p className="text-2xl text-amber-700 mb-4 font-semibold">This kitty is camera shy!</p>
@@ -394,7 +478,7 @@ export default function CatBreedsGallery() {
         )}
 
         {/* Initial State */}
-        {!selectedBreed && !loadingBreeds && (
+        {!selectedBreed && !loadingBreeds && !showFavorites && (
           <div className="text-center py-24">
             <div className="text-9xl mb-8 float-animation">🐱</div>
             <h3 className="text-3xl font-bold text-amber-800 mb-6 font-fredoka">Ready for some cat magic? ✨</h3>
@@ -428,13 +512,16 @@ export default function CatBreedsGallery() {
             </button>
             <div className="absolute -top-16 left-0 text-white text-lg font-semibold bg-white/20 backdrop-blur-sm rounded-full px-4 py-2">
               <span className="mr-2">😻</span>
-              Isn't this kitty adorable?
+              Isn&apos;t this kitty adorable?
             </div>
-            <img
+            <Image
               src={modalImage.url}
               alt={`Full size ${selectedBreedInfo?.name || 'cat'} photo`}
               className="max-w-full max-h-full object-contain rounded-3xl shadow-2xl border-4 border-white/20"
               onClick={(e) => e.stopPropagation()}
+              width={modalImage.width}
+              height={modalImage.height}
+              unoptimized
             />
           </div>
         </div>
