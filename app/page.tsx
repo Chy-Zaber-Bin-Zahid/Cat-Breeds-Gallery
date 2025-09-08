@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import Image from 'next/image'; // Import the Next.js Image component
+import Image from 'next/image';
 import { ChevronDown, Loader2, AlertCircle, X, Globe, Heart, Star } from 'lucide-react';
 
 interface Breed {
@@ -32,10 +32,44 @@ export default function CatBreedsGallery() {
   const [modalImage, setModalImage] = useState<CatImage | null>(null);
   const [favorites, setFavorites] = useState<CatImage[]>([]);
   const [showFavorites, setShowFavorites] = useState<boolean>(false);
+  const [isHydrated, setIsHydrated] = useState(false);
+
+  // Load state from local storage on initial component mount
+  useEffect(() => {
+    const storedFavorites = localStorage.getItem('cat-favorites');
+    if (storedFavorites) setFavorites(JSON.parse(storedFavorites));
+    
+    const storedOrigin = localStorage.getItem('cat-gallery-origin');
+    if (storedOrigin) setSelectedOrigin(JSON.parse(storedOrigin));
+    
+    const storedBreed = localStorage.getItem('cat-gallery-breed');
+    if (storedBreed) setSelectedBreed(JSON.parse(storedBreed));
+    
+    setIsHydrated(true); // Signal that hydration is complete
+  }, []);
+
+  // Save state to local storage whenever it changes, but only after initial hydration
+  useEffect(() => {
+    if (isHydrated) {
+      localStorage.setItem('cat-favorites', JSON.stringify(favorites));
+    }
+  }, [favorites, isHydrated]);
+
+  useEffect(() => {
+    if (isHydrated) {
+      localStorage.setItem('cat-gallery-origin', JSON.stringify(selectedOrigin));
+    }
+  }, [selectedOrigin, isHydrated]);
+
+  useEffect(() => {
+    if (isHydrated) {
+      localStorage.setItem('cat-gallery-breed', JSON.stringify(selectedBreed));
+    }
+  }, [selectedBreed, isHydrated]);
 
   // Fetch breeds on component mount
   useEffect(() => {
-    const fetchBreeds = async () => {
+    const fetchBreedsData = async () => {
       try {
         setLoadingBreeds(true);
         setError('');
@@ -44,11 +78,7 @@ export default function CatBreedsGallery() {
           headers['x-api-key'] = process.env.NEXT_PUBLIC_CAT_API_KEY;
         }
         const response = await fetch('https://api.thecatapi.com/v1/breeds', { headers });
-        
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
         const data: Breed[] = await response.json();
         setBreeds(data);
       } catch (err) {
@@ -58,39 +88,31 @@ export default function CatBreedsGallery() {
         setLoadingBreeds(false);
       }
     };
-
-    fetchBreeds();
+    fetchBreedsData();
   }, []);
-
-  // Load favorites from local storage on component mount
+  
+  // Fetch images when a breed is selected (and not showing favorites)
   useEffect(() => {
-    const storedFavorites = localStorage.getItem('cat-favorites');
-    if (storedFavorites) {
-      setFavorites(JSON.parse(storedFavorites));
+    if (selectedBreed && !showFavorites) {
+      fetchImages(selectedBreed);
     }
-  }, []);
-
-  // Save favorites to local storage whenever they change
-  useEffect(() => {
-    localStorage.setItem('cat-favorites', JSON.stringify(favorites));
-  }, [favorites]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedBreed, showFavorites]);
 
   // Get unique origins for filter
   const uniqueOrigins = useMemo(() => {
-    const origins = breeds
+    return breeds
       .map(breed => breed.origin)
       .filter(Boolean)
       .flatMap(origin => origin!.split(',').map(o => o.trim()))
       .filter((origin, index, array) => array.indexOf(origin) === index)
       .sort();
-    return origins;
   }, [breeds]);
 
   // Filter breeds based on search term and selected origin
   const filteredBreeds = useMemo(() => {
     return breeds.filter(breed => {
-      const matchesOrigin = !selectedOrigin || 
-        (breed.origin && breed.origin.toLowerCase().includes(selectedOrigin.toLowerCase()));
+      const matchesOrigin = !selectedOrigin || (breed.origin && breed.origin.toLowerCase().includes(selectedOrigin.toLowerCase()));
       return matchesOrigin;
     });
   }, [breeds, selectedOrigin]);
@@ -101,24 +123,15 @@ export default function CatBreedsGallery() {
       setImages([]);
       return;
     }
-
     try {
       setLoadingImages(true);
       setError('');
-      
       const headers: HeadersInit = {};
       if (process.env.NEXT_PUBLIC_CAT_API_KEY) {
         headers['x-api-key'] = process.env.NEXT_PUBLIC_CAT_API_KEY;
       }
-      const response = await fetch(
-        `https://api.thecatapi.com/v1/images/search?breed_ids=${breedId}&limit=100`,
-        { headers }
-      );
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
+      const response = await fetch(`https://api.thecatapi.com/v1/images/search?breed_ids=${breedId}&limit=100`, { headers });
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
       const data: CatImage[] = await response.json();
       setImages(data);
     } catch (err) {
@@ -134,15 +147,15 @@ export default function CatBreedsGallery() {
     setSelectedBreed(breedId);
     setDropdownOpen(false);
     setShowFavorites(false);
-    fetchImages(breedId);
   };
 
   const handleOriginSelect = (origin: string) => {
     setSelectedOrigin(origin);
     setOriginDropdownOpen(false);
-    // Reset selected breed when origin changes
-    setSelectedBreed('');
-    setImages([]);
+    if (selectedBreed) {
+      setSelectedBreed('');
+      setImages([]);
+    }
     setShowFavorites(false);
   };
 
@@ -156,14 +169,8 @@ export default function CatBreedsGallery() {
     document.body.style.overflow = 'unset';
   };
 
-  // Close modal on escape key
   useEffect(() => {
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        closeModal();
-      }
-    };
-
+    const handleEscape = (e: KeyboardEvent) => e.key === 'Escape' && closeModal();
     if (modalImage) {
       document.addEventListener('keydown', handleEscape);
       return () => document.removeEventListener('keydown', handleEscape);
@@ -173,11 +180,7 @@ export default function CatBreedsGallery() {
   const toggleFavorite = (image: CatImage) => {
     setFavorites(prevFavorites => {
       const isFavorite = prevFavorites.some(fav => fav.id === image.id);
-      if (isFavorite) {
-        return prevFavorites.filter(fav => fav.id !== image.id);
-      } else {
-        return [...prevFavorites, image];
-      }
+      return isFavorite ? prevFavorites.filter(fav => fav.id !== image.id) : [...prevFavorites, image];
     });
   };
 
@@ -280,9 +283,9 @@ export default function CatBreedsGallery() {
                     <Loader2 className="w-5 h-5 animate-spin text-orange-500" />
                     <span className="font-medium text-amber-700">Finding adorable breeds...</span>
                   </div>
-                ) : selectedBreed ? (
+                ) : selectedBreed && breeds.find(b => b.id === selectedBreed) ? (
                   <span className="font-medium text-amber-900 flex items-center gap-2">
-                    <span>😸</span> {breeds.find(breed => breed.id === selectedBreed)?.name}
+                    <span>😸</span> {breeds.find(b => b.id === selectedBreed)?.name}
                   </span>
                 ) : (
                   <span className="text-amber-600 font-medium flex items-center gap-2">
