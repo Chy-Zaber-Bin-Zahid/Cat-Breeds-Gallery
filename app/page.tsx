@@ -39,7 +39,11 @@ export default function CatBreedsGallery() {
       try {
         setLoadingBreeds(true);
         setError('');
-        const response = await fetch('https://api.thecatapi.com/v1/breeds');
+        const headers: HeadersInit = {};
+        if (process.env.NEXT_PUBLIC_CAT_API_KEY) {
+          headers['x-api-key'] = process.env.NEXT_PUBLIC_CAT_API_KEY;
+        }
+        const response = await fetch('https://api.thecatapi.com/v1/breeds', { headers });
         
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
@@ -102,8 +106,13 @@ export default function CatBreedsGallery() {
       setLoadingImages(true);
       setError('');
       
+      const headers: HeadersInit = {};
+      if (process.env.NEXT_PUBLIC_CAT_API_KEY) {
+        headers['x-api-key'] = process.env.NEXT_PUBLIC_CAT_API_KEY;
+      }
       const response = await fetch(
-        `https://api.thecatapi.com/v1/images/search?breed_ids=${breedId}&limit=16`
+        `https://api.thecatapi.com/v1/images/search?breed_ids=${breedId}&limit=100`,
+        { headers }
       );
       
       if (!response.ok) {
