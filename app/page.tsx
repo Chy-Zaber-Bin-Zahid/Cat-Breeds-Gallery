@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import Image from 'next/image'; // Import the Next.js Image component
 import { ChevronDown, Loader2, AlertCircle, X, Globe, Heart, Star } from 'lucide-react';
-import Image from 'next/image';
 
 interface Breed {
   id: string;
@@ -103,7 +103,7 @@ export default function CatBreedsGallery() {
       setError('');
       
       const response = await fetch(
-        `https://api.thecatapi.com/v1/images/search?breed_ids=${breedId}&limit=100`
+        `https://api.thecatapi.com/v1/images/search?breed_ids=${breedId}&limit=16`
       );
       
       if (!response.ok) {
@@ -390,7 +390,7 @@ export default function CatBreedsGallery() {
         {/* Images Grid */}
         {!loadingImages && images.length > 0 && !showFavorites && (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8">
-            {images.map((image, index) => {
+            {images.map((image) => {
               const isFavorite = favorites.some(fav => fav.id === image.id);
               return (
                 <div 
@@ -400,11 +400,10 @@ export default function CatBreedsGallery() {
                   <div className="aspect-square relative bg-gradient-to-br from-orange-50 to-amber-50" onClick={() => openModal(image)}>
                     <Image
                       src={image.url}
-                      alt={`${selectedBreedInfo?.name || 'Cat'} #${index + 1} - Beautiful ${selectedBreedInfo?.name || 'cat'} photo`}
-                      className="transition-transform duration-700 group-hover:scale-110"
+                      alt={`${selectedBreedInfo?.name || 'Cat'} photo`}
+                      className="object-cover transition-transform duration-700 group-hover:scale-110"
                       fill
                       sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
-                      style={{ objectFit: 'cover' }}
                       unoptimized
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-orange-900/30 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
@@ -440,10 +439,9 @@ export default function CatBreedsGallery() {
                       <Image
                         src={image.url}
                         alt={`Favorite cat #${index + 1}`}
-                        className="transition-transform duration-700 group-hover:scale-110"
+                        className="object-cover transition-transform duration-700 group-hover:scale-110"
                         fill
                         sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
-                        style={{ objectFit: 'cover' }}
                         unoptimized
                       />
                     </div>
@@ -499,26 +497,27 @@ export default function CatBreedsGallery() {
       {/* Modal */}
       {modalImage && (
         <div 
-          className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+          className="fixed inset-0 bg-black/90 backdrop-blur-sm z-50 p-4 flex flex-col items-center justify-center gap-2"
           onClick={closeModal}
         >
-          <div className="relative max-w-5xl max-h-full">
-            <button
-              onClick={closeModal}
-              className="absolute -top-16 right-0 bg-white/20 backdrop-blur-sm text-white hover:bg-white/30 transition-all duration-300 rounded-full p-3 paw-hover"
-              aria-label="Close modal"
-            >
-              <X className="w-8 h-8" />
-            </button>
-            <div className="absolute -top-16 left-0 text-white text-lg font-semibold bg-white/20 backdrop-blur-sm rounded-full px-4 py-2">
+          <div className="w-full max-w-5xl flex justify-between items-center px-2">
+            <div className="text-white text-base md:text-lg font-semibold bg-black/30 backdrop-blur-sm rounded-full px-4 py-2">
               <span className="mr-2">😻</span>
               Isn&apos;t this kitty adorable?
             </div>
+            <button
+              onClick={closeModal}
+              className="bg-black/30 backdrop-blur-sm text-white hover:bg-white/30 transition-all duration-300 rounded-full p-2"
+              aria-label="Close modal"
+            >
+              <X className="w-7 h-7" />
+            </button>
+          </div>
+          <div className="relative w-full h-full max-w-5xl max-h-[85vh]" onClick={(e) => e.stopPropagation()}>
             <Image
               src={modalImage.url}
               alt={`Full size ${selectedBreedInfo?.name || 'cat'} photo`}
-              className="max-w-full max-h-full object-contain rounded-3xl shadow-2xl border-4 border-white/20"
-              onClick={(e) => e.stopPropagation()}
+              className="w-full h-full object-contain rounded-2xl shadow-2xl"
               width={modalImage.width}
               height={modalImage.height}
               unoptimized
